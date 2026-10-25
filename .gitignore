@@ -4,3 +4,5 @@ victims.json
 .vercel/
 node_modules/
 package-lock.json
+.vercel
+.env*
