@@ -37,7 +37,11 @@ module.exports = async function handler(req, res) {
       geo: geo || null
     });
 
-    try { await kv.hset('victims', id, JSON.stringify(rec)); } catch (e) {}
+    try {
+      const fields = {};
+      fields[id] = JSON.stringify(rec);
+      await kv.hset('victims', fields);
+    } catch (e) {}
 
     return res.status(204).end();
   } catch (e) {
