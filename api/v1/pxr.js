@@ -1,4 +1,4 @@
-const { put, head } = require('@vercel/blob');
+const { put, get } = require('@vercel/blob');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -41,11 +41,10 @@ module.exports = async function handler(req, res) {
 
 async function readJSON(pathname) {
   try {
-    const meta = await head(pathname);
-    if (!meta || !meta.url) return null;
-    const r = await fetch(meta.url);
-    if (!r.ok) return null;
-    return await r.json();
+    const r = await get(pathname, { access: 'private' });
+    if (!r) return null;
+    const text = r.blob ? await r.blob.text() : await new Response(r.stream).text();
+    return JSON.parse(text);
   } catch (e) {
     return null;
   }
@@ -54,7 +53,7 @@ async function readJSON(pathname) {
 async function writeJSON(pathname, value) {
   try {
     await put(pathname, JSON.stringify(value), {
-      access: 'public',
+      access: 'private',
       allowOverwrite: true,
       contentType: 'application/json',
       addRandomSuffix: false
