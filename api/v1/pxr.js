@@ -44,7 +44,7 @@ async function readJSON(pathname) {
   try {
     const r = await get(pathname, { access: 'private' });
     if (!r) return null;
-    const text = r.blob ? await r.blob.text() : await new Response(r.stream).text();
+    const text = await new Response(r.stream).text();
     return JSON.parse(text);
   } catch (e) {
     console.error('PXR_READ_ERR', pathname, e && (e.message || e));

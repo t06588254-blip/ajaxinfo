@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
       try {
         const r = await get(b.pathname, { access: 'private' });
         if (!r) continue;
-        const text = r.blob ? await r.blob.text() : await new Response(r.stream).text();
+        const text = await new Response(r.stream).text();
         sessions.push(JSON.parse(text));
       } catch (e) {
         console.error('DV_GET_ERR', b.pathname, e && (e.message || e));
