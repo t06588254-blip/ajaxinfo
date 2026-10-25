@@ -1,0 +1,30 @@
+name: clean-pdf
+
+on:
+  push:
+    paths:
+      - bait.pdf
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    if: "!contains(github.event.head_commit.message, '[pdf-clean]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Masquer les metadonnees
+        run: node tools/clean-pdf.js bait.pdf
+      - name: Commit si modifie
+        run: |
+          if ! git diff --quiet bait.pdf; then
+            git config user.name "pdf-cleaner"
+            git config user.email "pdf-cleaner@users.noreply.github.com"
+            git add bait.pdf
+            git commit -m "[pdf-clean] masquage des metadonnees"
+            git push
+          fi

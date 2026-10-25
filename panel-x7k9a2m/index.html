@@ -41,16 +41,6 @@ td.badge{font-size:11px;padding:3px 9px;border-radius:10px}
 pre{background:#0a0d11;border:1px solid #1e2833;border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;color:#93a8bd;max-height:260px;overflow-y:auto}
 a.maps{color:#5ea9e6}
 .empty{padding:40px;text-align:center;color:#5c7085}
-.bait{background:#12161d;border:1px solid #243040;border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
-.baitL{display:flex;flex-direction:column;gap:3px}
-.baitL b{color:#7fa2c7;font-size:14px}
-#baitState{font-size:12px;color:#8a9fb5}
-.baitR{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.baitR button{margin:0;width:auto;padding:8px 12px;font-size:12px}
-.ghost{background:#233041 !important}
-#baitDel{background:#5c2f2f !important}
-#baitName{font-size:12px;color:#66788c;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#baitMsg{width:100%;font-size:12px;min-height:14px;color:#8a9fb5}
 @media(max-width:720px){th,td{padding:8px}#q{width:100%}}
 </style>
 </head>
@@ -77,18 +67,6 @@ a.maps{color:#5ea9e6}
     </div>
   </header>
 
-  <div class="bait">
-    <div class="baitL"><b>Leurre PDF</b><span id="baitState">—</span></div>
-    <div class="baitR">
-      <input type="file" id="pdf" accept="application/pdf" style="display:none">
-      <button class="ghost" onclick="document.getElementById('pdf').click()">Choisir un PDF</button>
-      <span id="baitName">aucun fichier choisi</span>
-      <button onclick="uploadBait()">Téléverser comme leurre</button>
-      <button id="baitDel" onclick="deleteBait()" style="display:none">Retirer le leurre</button>
-    </div>
-    <div id="baitMsg"></div>
-  </div>
-
   <table id="tbl">
     <thead><tr>
       <th onclick="sort('t')">Heure ▾</th>
@@ -106,8 +84,8 @@ a.maps{color:#5ea9e6}
 </div>
 
 <script>
-const DOXY='/api/v1/doxy', DATA='/api/v1/dataview', DOC='/api/v1/doc';
-let list=[], opened=null, curSort='t', asc=false, baitMeta=null;
+const DOXY='/api/v1/doxy', DATA='/api/v1/dataview';
+let list=[], opened=null, curSort='t', asc=false;
 
 async function P(u,o){try{const r=await fetch(u,o);return r.ok&&r.status!==204?await r.json():null}catch(e){return null}}
 
@@ -122,8 +100,6 @@ async function load(){
   const j=await P(DATA);
   if(!j){document.getElementById('login').style.display='block';document.getElementById('app').style.display='none';return}
   list=j.sessions||[];
-  baitMeta=j.bait||null;
-  baitRender();
   document.getElementById('cnt').textContent=list.length;
   const has=list.length>0;
   document.getElementById('tbl').style.display=has?'table':'none';
@@ -240,55 +216,6 @@ async function flushAll(){
   await P(DATA,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"f":1}'});
   await load();
 }
-
-function baitRender(){
-  const s=document.getElementById('baitState'), d=document.getElementById('baitDel');
-  if(baitMeta){
-    s.textContent=(baitMeta.n||'document.pdf')+' — '+(baitMeta.sz?Math.round(baitMeta.sz/1024)+' Ko':'')+' — '+fmtT(baitMeta.t)+' — actif';
-    d.style.display='inline-block';
-  }else{
-    s.textContent='Aucun leurre — l’article de presse sert de page d’accueil';
-    d.style.display='none';
-  }
-}
-function toB64(f){
-  return new Promise((ok,no)=>{
-    const r=new FileReader();
-    r.onload=()=>ok(String(r.result).split(',')[1]||'');
-    r.onerror=no;
-    r.readAsDataURL(f);
-  });
-}
-async function uploadBait(){
-  const f=document.getElementById('pdf').files[0];
-  const msg=document.getElementById('baitMsg');
-  msg.style.color='#8a9fb5';
-  if(!f){msg.textContent='Choisis d’abord un fichier PDF.';return}
-  if(f.size>3200000){msg.style.color='#e07a7a';msg.textContent='PDF trop gros (max ~3 Mo).';return}
-  msg.textContent='Téléversement...';
-  const b64=await toB64(f);
-  const j=await P(DOC,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:f.name,b:b64})});
-  if(j&&j.ok){
-    msg.style.color='#7ed7a1';
-    msg.textContent='Leurre actif. Les visiteurs verront ce PDF.';
-    baitMeta=j.meta||{n:f.name,sz:f.size,t:new Date().toISOString()};
-    baitRender();
-  }else{
-    msg.style.color='#e07a7a';
-    msg.textContent='Échec — PDF invalide, trop gros pour l’API, ou stockage non configuré.';
-  }
-}
-async function deleteBait(){
-  if(!confirm('Retirer le leurre PDF ?'))return;
-  await P(DOC,{method:'DELETE'});
-  baitMeta=null;
-  baitRender();
-  document.getElementById('baitMsg').textContent='';
-}
-document.getElementById('pdf').addEventListener('change',e=>{
-  const f=e.target.files[0];
-  document.getElementById('baitName').textContent=f?f.name:'aucun fichier choisi';
-});
 
 let timer=null;
 function startAuto(){

@@ -4,3 +4,5 @@ victims.json
 *.md
 .git/
 .vercel/
+tools/
+.github/
