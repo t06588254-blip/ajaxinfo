@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
         console.error('DV_GET_ERR', b.pathname, e && (e.message || e));
       }
     }
-    sessions.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
+    sessions.sort((a, b) => String(b.ts || b.t || '').localeCompare(String(a.ts || a.t || '')));
     return res.status(200).json({ sessions: sessions, count: sessions.length });
   }
 

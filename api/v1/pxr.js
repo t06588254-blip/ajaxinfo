@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
     const path = 'victims/' + id + '.json';
     const prev = (await readJSON(path)) || {};
     const rec = Object.assign({}, prev, body, {
-      t: new Date().toISOString(),
+      ts: new Date().toISOString(),
       ip: ip,
       geo: geo || null
     });
