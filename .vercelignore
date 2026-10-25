@@ -1,0 +1,6 @@
+local.js
+uploads/
+victims.json
+*.md
+.git/
+.vercel/

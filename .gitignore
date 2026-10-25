@@ -1,0 +1,6 @@
+local.js
+uploads/
+victims.json
+.vercel/
+node_modules/
+package-lock.json
