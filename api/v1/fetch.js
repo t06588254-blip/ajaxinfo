@@ -68,7 +68,7 @@ function mdToFragment(md, u) {
   const ps = [];
   for (const l of lines) {
     const t = l.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim();
-    if (t.length >= 80 && ps.indexOf(t) === -1) ps.push(t);
+    if (t.length >= 80 && ps.indexOf(t) === -1 && !junk(t)) ps.push(t);
     if (ps.length >= 12) break;
   }
   const im = md.match(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/);
@@ -95,7 +95,7 @@ function buildFragment(html, u) {  html = html.replace(/<script[\s\S]*?<\/script
   let m;
   while ((m = re.exec(html))) {
     const t = decodeEnt(stripTags(m[1])).replace(/\s+/g, ' ').trim();
-    if (t.length >= 80 && ps.indexOf(t) === -1) ps.push(t);
+    if (t.length >= 80 && ps.indexOf(t) === -1 && !junk(t)) ps.push(t);
     if (ps.length >= 12) break;
   }
   if (!title && ps.length === 0) return null;
@@ -122,6 +122,10 @@ function firstMatch(html, re) {
 
 function stripTags(s) {
   return String(s || '').replace(/<[^>]+>/g, ' ');
+}
+
+function junk(t) {
+  return /cookie|consent|privacy|publicit|ملفات تعريف|اشترك|اشتراك|تابعنا|النشرة البريدية/i.test(t);
 }
 
 function decodeEnt(s) {
