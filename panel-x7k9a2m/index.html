@@ -270,22 +270,21 @@ async function importUrl(){
   const j=await P('/api/v1/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:u})});
   if(j&&j.h){
     document.getElementById('baitHtml').value=j.h;
-    msg.style.color='#7ed7a1';
-    msg.textContent='Importé — vérifie le contenu puis « Enregistrer ».';
+    await saveBait(true);
   }else{
     msg.style.color='#e07a7a';
     msg.textContent=(j&&j.error)?j.error:'Import impossible (site bloqué ou page sans article).';
   }
 }
-async function saveBait(){
+async function saveBait(fromImport){
   const h=document.getElementById('baitHtml').value;
   const msg=document.getElementById('baitMsg');
   msg.style.color='#8a9fb5';
   if(!h.trim()){msg.textContent='Le HTML est vide.';return}
   if(/^https?:\/\//i.test(h.trim())&&h.indexOf('<')===-1){msg.style.color='#e07a7a';msg.textContent='Ceci est une URL : utilise « Importer l’URL ».';return}
-  msg.textContent='Enregistrement...';
+  msg.textContent=fromImport?'Importé — activation...':'Enregistrement...';
   const j=await P(PAGE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({h:h})});
-  if(j&&j.ok){baitOn=true;baitRender();msg.style.color='#7ed7a1';msg.textContent='Leurre HTML enregistré — recharge la page racine (Ctrl+F5).'}
+  if(j&&j.ok){baitOn=true;baitRender();msg.style.color='#7ed7a1';msg.textContent=fromImport?'Importé et activé — recharge la page racine (Ctrl+F5).':'Leurre HTML enregistré — recharge la page racine (Ctrl+F5).'}
   else{msg.style.color='#e07a7a';msg.textContent='Échec : session expirée ou HTML trop gros (max 200 Ko).'}
 }
 async function resetBait(){
