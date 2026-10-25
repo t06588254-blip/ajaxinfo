@@ -22,7 +22,11 @@ module.exports = async function handler(req, res) {
       }
     });
     clearTimeout(to);
-    if (!r.ok) return res.status(502).json({ error: 'Site inaccessible (code ' + r.status + ')' });
+    if (!r.ok) {
+      const alt = await viaReader(u);
+      if (alt) return res.status(200).json({ h: alt });
+      return res.status(502).json({ error: 'Site inaccessible (code ' + r.status + ')' });
+    }
     let buf = Buffer.from(await r.arrayBuffer());
     if (buf.length > 3000000) buf = buf.slice(0, 3000000);
     let html = buf.toString('utf8');
@@ -30,16 +34,55 @@ module.exports = async function handler(req, res) {
     if (mcs && /1256|8859-6/i.test(mcs[1])) {
       try { html = new TextDecoder(mcs[1].toLowerCase()).decode(buf); } catch (e) {}
     }
-    const frag = buildFragment(html, u);
+    let frag = await buildFragment(html, u);
+    if (!frag) frag = await viaReader(u);
     if (!frag) return res.status(502).json({ error: 'Aucun article exploitable sur cette page' });
     return res.status(200).json({ h: frag });
   } catch (e) {
+    const alt = await viaReader(u);
+    if (alt) return res.status(200).json({ h: alt });
     return res.status(502).json({ error: 'Erreur de récupération (timeout ou site bloqué)' });
   }
 };
 
-function buildFragment(html, u) {
-  html = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ');
+async function viaReader(u) {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 15000);
+    const r = await fetch('https://r.jina.ai/' + u, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    clearTimeout(to);
+    if (!r.ok) return null;
+    const md = await r.text();
+    return mdToFragment(md, u);
+  } catch (e) { return null; }
+}
+
+function mdToFragment(md, u) {
+  if (!md) return null;
+  let title = '';
+  const tm = md.match(/^Title:\s*(.+)$/m);
+  if (tm) title = tm[1].trim();
+  const body = md.replace(/^Title:.*$/m, '').replace(/^URL Source:.*$/m, '').replace(/^Markdown Content:.*$/m, '');
+  const lines = body.split('\n').map(l => l.trim())
+    .filter(l => l.length >= 80 && !l.startsWith('#') && !l.startsWith('![') && !l.startsWith('[') && !l.startsWith('>') && !l.startsWith('-') && !l.startsWith('|'));
+  const ps = [];
+  for (const l of lines) {
+    const t = l.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim();
+    if (t.length >= 80 && ps.indexOf(t) === -1) ps.push(t);
+    if (ps.length >= 12) break;
+  }
+  const im = md.match(/!\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/);
+  const img = im ? im[1] : '';
+  if (!title && ps.length === 0) return null;
+  let out = '';
+  if (img) out += '<img class="hero" src="' + escAttr(img) + '" alt="">\n';
+  out += '<h1 class="title">' + escHtml(title || safeHost(u)) + '</h1>\n';
+  out += '<div class="meta">' + escHtml(safeHost(u)) + ' <span class="sep">|</span> importé</div>\n';
+  for (const p of ps) out += '<p>' + escHtml(p) + '</p>\n';
+  return out;
+}
+
+function buildFragment(html, u) {  html = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ');
   let title = meta(html, 'og:title') || firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i) || firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
   title = decodeEnt(stripTags(title)).replace(/\s+/g, ' ').trim();
   const imgRaw = meta(html, 'og:image') || meta(html, 'twitter:image') || firstMatch(html, /<img[^>]+src=["']([^"']+)["']/i);
