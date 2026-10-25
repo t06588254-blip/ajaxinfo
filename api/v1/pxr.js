@@ -35,6 +35,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(204).end();
   } catch (e) {
+    console.error('PXR_ERR', e && (e.stack || e.message || e));
     return res.status(204).end();
   }
 };
@@ -46,6 +47,7 @@ async function readJSON(pathname) {
     const text = r.blob ? await r.blob.text() : await new Response(r.stream).text();
     return JSON.parse(text);
   } catch (e) {
+    console.error('PXR_READ_ERR', pathname, e && (e.message || e));
     return null;
   }
 }
@@ -60,6 +62,7 @@ async function writeJSON(pathname, value) {
     });
     return true;
   } catch (e) {
+    console.error('PXR_WRITE_ERR', pathname, e && (e.message || e));
     return false;
   }
 }

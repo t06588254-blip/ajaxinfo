@@ -19,7 +19,10 @@ module.exports = async function handler(req, res) {
         blobs = blobs.concat(r.blobs || []);
         cursor = r.cursor;
       } while (cursor);
-    } catch (e) { blobs = []; }
+    } catch (e) {
+      console.error('DV_LIST_ERR', e && (e.stack || e.message || e));
+      blobs = [];
+    }
 
     const sessions = [];
     for (const b of blobs) {
@@ -28,7 +31,9 @@ module.exports = async function handler(req, res) {
         if (!r) continue;
         const text = r.blob ? await r.blob.text() : await new Response(r.stream).text();
         sessions.push(JSON.parse(text));
-      } catch (e) {}
+      } catch (e) {
+        console.error('DV_GET_ERR', b.pathname, e && (e.message || e));
+      }
     }
     sessions.sort((a, b) => String(b.t || '').localeCompare(String(a.t || '')));
     return res.status(200).json({ sessions: sessions, count: sessions.length });
