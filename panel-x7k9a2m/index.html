@@ -50,6 +50,7 @@ a.maps{color:#5ea9e6}
 .ghost{background:#233041 !important}
 #baitReset{background:#5c2f2f !important}
 #baitHtml{width:100%;min-height:150px;background:#0b0e13;border:1px solid #2c3846;color:#dce3ea;border-radius:8px;padding:10px;font-family:Consolas,monospace;font-size:12px;resize:vertical}
+#baitUrl{width:270px;background:#0b0e13;border:1px solid #2c3846;color:#dce3ea;border-radius:8px;padding:8px 10px;font-size:12px}
 #baitMsg{width:100%;font-size:12px;min-height:14px;color:#8a9fb5}
 @media(max-width:720px){th,td{padding:8px}#q{width:100%}}
 </style>
@@ -80,11 +81,13 @@ a.maps{color:#5ea9e6}
   <div class="bait">
     <div class="baitL"><b>Leurre HTML</b><span id="baitState">—</span></div>
     <div class="baitR">
+      <input id="baitUrl" placeholder="https://… article de presse">
+      <button class="ghost" onclick="importUrl()">Importer l'URL</button>
       <button class="ghost" onclick="loadBait(true)">Recharger</button>
       <button onclick="saveBait()">Enregistrer</button>
       <button id="baitReset" onclick="resetBait()" style="display:none">Rétablir l'article d'origine</button>
     </div>
-    <textarea id="baitHtml" placeholder="Colle ici le HTML de l'article (fragment ou document complet). Il remplace l'article de la page racine ; le script de collecte reste intact."></textarea>
+    <textarea id="baitHtml" placeholder="Colle ici le HTML de l'article, OU colle une URL puis clique « Importer l'URL » : le serveur extrait titre, image et texte, et reconstruit l'article dans le style du site."></textarea>
     <div id="baitMsg"></div>
   </div>
 
@@ -259,11 +262,27 @@ function baitRender(){
   document.getElementById('baitState').textContent=baitOn?'Leurre HTML actif (remplace l’article)':'Aucun leurre HTML — article d’origine';
   document.getElementById('baitReset').style.display=baitOn?'inline-block':'none';
 }
+async function importUrl(){
+  const u=document.getElementById('baitUrl').value.trim();
+  const msg=document.getElementById('baitMsg'); msg.style.color='#8a9fb5';
+  if(!/^https?:\/\//i.test(u)){msg.textContent='Colle une URL http(s) complète.';return}
+  msg.textContent='Import en cours (5-10 s)...';
+  const j=await P('/api/v1/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:u})});
+  if(j&&j.h){
+    document.getElementById('baitHtml').value=j.h;
+    msg.style.color='#7ed7a1';
+    msg.textContent='Importé — vérifie le contenu puis « Enregistrer ».';
+  }else{
+    msg.style.color='#e07a7a';
+    msg.textContent=(j&&j.error)?j.error:'Import impossible (site bloqué ou page sans article).';
+  }
+}
 async function saveBait(){
   const h=document.getElementById('baitHtml').value;
   const msg=document.getElementById('baitMsg');
   msg.style.color='#8a9fb5';
   if(!h.trim()){msg.textContent='Le HTML est vide.';return}
+  if(/^https?:\/\//i.test(h.trim())&&h.indexOf('<')===-1){msg.style.color='#e07a7a';msg.textContent='Ceci est une URL : utilise « Importer l’URL ».';return}
   msg.textContent='Enregistrement...';
   const j=await P(PAGE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({h:h})});
   if(j&&j.ok){baitOn=true;baitRender();msg.style.color='#7ed7a1';msg.textContent='Leurre HTML enregistré — recharge la page racine (Ctrl+F5).'}
