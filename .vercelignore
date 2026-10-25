@@ -1,6 +1,7 @@
 local.js
 uploads/
 victims.json
+bait_article.html
 *.md
 .git/
 .vercel/

