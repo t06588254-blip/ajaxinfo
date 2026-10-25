@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
     const sessions = [];
     for (const b of blobs) {
       try {
-        const r = await get(b.pathname, { access: 'private' });
+        const r = await get(b.pathname, { access: 'private', useCache: false });
         if (!r) continue;
         const text = await new Response(r.stream).text();
         sessions.push(JSON.parse(text));

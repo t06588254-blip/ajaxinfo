@@ -26,7 +26,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    try { await del('bait/article.html'); } catch (e) {}
+    try { await del('bait/article.html'); } catch (e) { console.error('PAGE_DEL_ERR', e && (e.message || e)); }
     return res.status(200).json({ ok: 1 });
   }
 
@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
 
 async function readHtml() {
   try {
-    const r = await get('bait/article.html', { access: 'private' });
+    const r = await get('bait/article.html', { access: 'private', useCache: false });
     if (!r) return null;
     return await new Response(r.stream).text();
   } catch (e) {

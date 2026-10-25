@@ -42,7 +42,7 @@ module.exports = async function handler(req, res) {
 
 async function readJSON(pathname) {
   try {
-    const r = await get(pathname, { access: 'private' });
+    const r = await get(pathname, { access: 'private', useCache: false });
     if (!r) return null;
     const text = await new Response(r.stream).text();
     return JSON.parse(text);
