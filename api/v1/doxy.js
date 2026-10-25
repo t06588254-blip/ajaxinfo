@@ -1,4 +1,8 @@
-const { kv } = require('@vercel/kv');
+const { Redis } = require('@upstash/redis');
+const kv = new Redis({
+  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || 'https://invalid.upstash.io',
+  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || 'invalid'
+});
 const crypto = require('crypto');
 
 module.exports = async function handler(req, res) {
