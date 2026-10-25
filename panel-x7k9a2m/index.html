@@ -141,13 +141,27 @@ function geoTxt(s){
 }
 function ispTxt(s){const g=s.geo||{};return g.isp||g.org||'—'}
 function devTxt(s){
-  const m=s.hm||s.y||s.br||s.u||'—';
+  let m=s.hm||s.y;
+  if(!m){
+    const u=s.u||'';
+    if(/iPhone/.test(u))m='iPhone';
+    else if(/iPad/.test(u))m='iPad';
+    else if(/Android/.test(u)){
+      if(s.wv||s.app)m='Android (navigateur intégré)';
+      else if(s.uh===0)m='Android (modèle masqué)';
+      else m='Android (modèle inconnu)';
+    }
+    else if(/Windows/.test(u))m='PC Windows';
+    else if(/Macintosh/.test(u))m='Mac';
+    else if(/Linux/.test(u))m='Linux';
+    else m=s.br||'—';
+  }
   return m.length>34?m.slice(0,34)+'…':m;
 }
 function precS(s){
   const g=s.geo||{};
-  if(g&&!g.err&&g.lat!==null&&g.lat!==undefined&&g.lat!=='')return '<span class="badge bg-ok">lat/lon</span>';
-  if(g&&!g.err)return '<span class="badge bg-no">ville</span>';
+  if(g&&!g.err&&g.lat!==null&&g.lat!==undefined&&g.lat!=='')return '<span class="badge bg-ok">approx. IP</span>';
+  if(g&&!g.err)return '<span class="badge bg-no">région IP</span>';
   return '<span class="badge bg-no">—</span>';
 }
 function fmtT(t){try{const d=new Date(t);return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR')}catch(e){return t||'—'}}
@@ -183,7 +197,7 @@ function detailHtml(s){
   if(g.lat!=null&&g.lon!=null&&g.lat!==''&&g.lon!==''&&!g.err){
     maps=`<a class="maps" target="_blank" href="https://maps.google.com/?q=${g.lat},${g.lon}">${g.lat}, ${g.lon}</a>`;
   }
-  const prec=(g.lat!=null&&!g.err&&g.lat!=='')?'Exact (lat/lon)':'Ville/region approx (IP)';
+  const prec=(g.lat!=null&&!g.err&&g.lat!=='')?'approx. via IP (lat/lon)':'approx. via IP (ville/région)';
   return `<td colspan="6" style="white-space:normal"><div id="detail" style="display:block">
     <h3>Localisation (${prec})</h3>
     <div class="kv">
@@ -198,10 +212,14 @@ function detailHtml(s){
     </div>
     <h3>Appareil</h3>
     <div class="kv">
-      ${fld('modele',s.y)}
-      ${fld('android',s.av)}
+      ${fld('modele (UA)',s.y)}
       ${fld('modele (hints)',s.hm)}
+      ${fld('android (UA)',s.av)}
       ${fld('android (hints)',s.pv)}
+      ${fld('os',s.os)}
+      ${fld('app intégrée',s.app)}
+      ${fld('webview',s.wv)}
+      ${fld('UA-CH dispo',s.uh)}
       ${fld('arch',s.arch)}
       ${fld('bits',s.bits)}
       ${fld('mobile',s.mob)}
